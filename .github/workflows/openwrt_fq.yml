@@ -84,6 +84,9 @@ jobs:
           else
             echo "Warning: $CONFIG_FILE not found, using default configuration."
           fi
+        # === 在这里加入这一行来打印并检查配置 ===
+          echo "=== Checking Target Config ==="
+          cat openwrt/$CONFIG_FILE | grep CONFIG_TARGET || echo "Config file not in openwrt folder or missing target keys"
         
     - name: Make Defconfig
       working-directory: ./openwrt
