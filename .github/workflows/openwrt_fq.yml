@@ -79,7 +79,7 @@ jobs:
       run: |
         # 【修改点】在 feeds 安装完成后，再将根目录的 .config 移动到 openwrt 内部
           if [ -f "$CONFIG_FILE" ]; then
-            mv "$CONFIG_FILE" openwrt/$CONFIG_FILE
+            mv "$CONFIG_FILE" openwrt/.config
             echo "Custom configuration applied successfully."
           else
             echo "Warning: $CONFIG_FILE not found, using default configuration."
