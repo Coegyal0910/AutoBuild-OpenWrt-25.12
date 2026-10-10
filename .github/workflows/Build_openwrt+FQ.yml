@@ -1,1 +1,123 @@
-123
+#=================================================
+# Description: Build OpenWrt using GitHub Actions
+# Lisence: MIT
+# Author: eSirPlayground
+# Youtube Channel: https://goo.gl/fvkdwm 
+#=================================================
+
+name: Build_openwrt
+
+# Add a button to trigger the workflow
+on: 
+  repository_dispatch:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+
+    env:
+      BUILD_DATE: ""
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@master
+
+    - name: Initialization environment
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        set +e
+        docker rmi `docker images -q`
+        echo "Deleting files, please wait ..."
+        sudo rm -rf \
+          /usr/share/dotnet \
+          /etc/mysql \
+          /etc/php
+        sudo -E apt-get -y purge \
+          azure-cli \
+          ghc* \
+          zulu* \
+          hhvm \
+          llvm* \
+          firefox \
+          google* \
+          dotnet* \
+          powershell \
+          openjdk* \
+          mysql* \
+          php*
+        sudo -E apt-get update
+        sudo -E apt-get -y install ack antlr3 asciidoc autoconf automake autopoint binutils bison build-essential bzip2 ccache clang-18 cmake cpio curl device-tree-compiler flex gawk gcc-multilib g++-multilib gettext genisoimage git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libfuse-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libpython3-dev libreadline-dev libssl-dev libtool llvm-18 lrzsz msmtp ninja-build p7zip p7zip-full patch pkgconf python3 python3-pyelftools python3-setuptools qemu-utils rsync scons squashfs-tools subversion swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
+        sudo -E apt-get -y autoremove --purge
+        sudo -E apt-get clean
+        
+    - name: Clone source code
+      env: 
+        REPO_URL: https://github.com/Coegyal0910/openwrt
+        REPO_BRANCH: my-openwrt-v25.12.5
+      run: |
+        git clone --depth 1 $REPO_URL -b $REPO_BRANCH openwrt
+
+    - name: Update & Install feeds
+      working-directory: ./openwrt
+      run: |
+        # 替换官方 luci 为你自己的 luci 仓库及对应分支
+        sed -i 's|src-git luci.*|src-git luci https://github.com/Coegyal0910/luci.git;openwrt-25.12|g' feeds.conf.default
+        
+        #添加FQ插件链接
+        echo "src-git passwall_packages https://github.com/Openwrt-Passwall/openwrt-passwall-packages.git;main" >> ./feeds.conf.default
+        echo "src-git passwall_luci https://github.com/Openwrt-Passwall/openwrt-passwall.git;main" >> ./feeds.conf.default        
+        
+        ./scripts/feeds update -a
+        ./scripts/feeds install -a
+        ./scripts/feeds install -a
+
+    - name: Configuration Customization
+      env:
+        CONFIG_FILE: 'FQ.config'
+      run: |
+        # 【修改点】在 feeds 安装完成后，再将根目录的 .config 移动到 openwrt 内部
+        [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/$CONFIG_FILE
+        
+    - name: Make Defconfig
+      working-directory: ./openwrt
+      run: |
+        make defconfig
+
+    - name: Download package
+      working-directory: ./openwrt
+      run: |
+        make download -j$(nproc)
+        find dl -size -1024c -exec ls -l {} \;
+        find dl -size -1024c -exec rm -f {} \;
+        
+    - name: Build firmware
+      working-directory: ./openwrt
+      run: |
+        echo -e "$(nproc) thread build."
+        make -j$(nproc) V=s
+        
+    - name: Get current date
+      id: date
+      run: echo "BUILD_DATE=$(date +\%Y\%m\%d-\%H\%M)" >> $GITHUB_ENV
+
+    - name: Upload firmware to Release
+      uses: softprops/action-gh-release@master
+      with:
+        files: openwrt/bin/targets/*/*/*
+        name: OpenWrt+FQ 25.12.5 ${{ env.BUILD_DATE }}
+        tag_name: 25.12.5-v${{ env.BUILD_DATE }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Send Telegram Notification
+      uses: appleboy/telegram-action@master
+      with:
+        to: ${{ secrets.TELEGRAM_TO }}
+        token: ${{ secrets.TELEGRAM_TOKEN }}
+        message: |
+          🎉 OpenWrt+FQ 25.12 固件编译成功！
+          仓库: ${{ github.repository }}
+          分支: ${{ github.ref_name }}
+          触发人: ${{ github.actor }}
