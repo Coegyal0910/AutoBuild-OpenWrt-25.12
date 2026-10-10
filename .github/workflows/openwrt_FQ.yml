@@ -75,7 +75,7 @@ jobs:
 
     - name: Configuration Customization
       env:
-        CONFIG_FILE: 'FQ.config'
+        CONFIG_FILE: 'fq.config'
       run: |
         # 【修改点】在 feeds 安装完成后，再将根目录的 .config 移动到 openwrt 内部
         [ -e $CONFIG_FILE ] && mv $CONFIG_FILE openwrt/$CONFIG_FILE
